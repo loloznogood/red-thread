@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Tests\Controller;
+namespace App\Tests;
 
 use App\Repository\UserRepository;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
@@ -8,18 +8,6 @@ use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 
 final class RegistrationControllerTest extends WebTestCase
 {
-    private function register(KernelBrowser $client, array $payload): array
-    {
-        $client->request(
-            'POST',
-            '/api/register',
-            server: ['CONTENT_TYPE' => 'application/json'],
-            content: json_encode($payload),
-        );
-
-        return json_decode($client->getResponse()->getContent(), true);
-    }
-
     public function testRegisterCreatesUser(): void
     {
         // Arrange: create a fake HTTP client
@@ -145,5 +133,17 @@ final class RegistrationControllerTest extends WebTestCase
 
         // Assert username
         $this->assertSame('username', $firstViolation['propertyPath']);
+    }
+
+    private function register(KernelBrowser $client, array $payload): array
+    {
+        $client->request(
+            'POST',
+            '/api/register',
+            server: ['CONTENT_TYPE' => 'application/json'],
+            content: json_encode($payload),
+        );
+
+        return json_decode($client->getResponse()->getContent(), true);
     }
 }
