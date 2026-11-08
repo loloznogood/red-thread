@@ -1,103 +1,63 @@
 <?php
 
-namespace App\Tests;
+namespace App\Tests\Controller;
 
-use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
+use App\Tests\AppWebTestCase;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
-use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
-use Doctrine\ORM\EntityManagerInterface;
-use App\Entity\User;
 
-final class AuthenticationTest extends WebTestCase
+final class AuthenticationTest extends AppWebTestCase
 {
     public function testLoginReturnsToken(): void
     {
-        // Arrange: create a fake HTTP client
         $client = static::createClient();
-
         $this->createUser('test@mail.com', 'motdepasse123!');
 
-        $data = $this->login($client, ['email' => 'test@mail.com', 'password' => 'motdepasse123!']);
+        $data = $this->sendLoginRequest($client, 'test@mail.com', 'motdepasse123!');
 
         $this->assertResponseStatusCodeSame(200);
-
         $this->assertArrayHasKey('token', $data);
         $this->assertNotEmpty($data['token']);
     }
 
     public function testLoginWithWrongPasswordFails(): void
     {
-        // Arrange: create a fake HTTP client
         $client = static::createClient();
-
         $this->createUser('test@mail.com', 'motdepasse123!');
 
-        $this->login($client, ['email' => 'test@mail.com', 'password' => 'motdepasse123!!']);
+        $this->sendLoginRequest($client, 'test@mail.com', 'mauvais-mot-de-passe');
 
         $this->assertResponseStatusCodeSame(401);
     }
 
     public function testMeWithoutTokenFails(): void
     {
-        // Arrange: create a fake HTTP client
         $client = static::createClient();
 
-        $client->request(
-            'GET',
-            '/api/me',
-        );
+        $client->request('GET', '/api/me');
 
         $this->assertResponseStatusCodeSame(401);
     }
 
     public function testMeWithTokenReturnsUser(): void
     {
-        // Arrange: create a fake HTTP client
         $client = static::createClient();
-
         $this->createUser('test@mail.com', 'motdepasse123!');
+        $token = $this->login($client, ['email' => 'test@mail.com', 'password' => 'motdepasse123!']);
 
-        $data = $this->login($client, ['email' => 'test@mail.com', 'password' => 'motdepasse123!']);
-
-        $this->assertResponseStatusCodeSame(200);
-
-        $client->request(
-            'GET',
-            '/api/me',
-            server: ['HTTP_AUTHORIZATION' => 'Bearer ' . $data['token']],
-        );
+        $client->request('GET', '/api/me', server: ['HTTP_AUTHORIZATION' => 'Bearer ' . $token]);
 
         $this->assertResponseStatusCodeSame(200);
-
-        $meData = json_decode($client->getResponse()->getContent(), true);
-
-        $this->assertSame('test@mail.com', $meData['user']['email']);
+        $data = json_decode($client->getResponse()->getContent(), true);
+        $this->assertSame('test@mail.com', $data['user']['email']);
     }
 
-    private function createUser(string $email, string $password): User
-    {
-        $container = static::getContainer();
-        $passwordHasher = $container->get(UserPasswordHasherInterface::class);
-        $entityManager = $container->get(EntityManagerInterface::class);
-
-        $user = new User();
-        $user->setEmail($email);
-        $user->setUsername('testeur');
-        $user->setPassword($passwordHasher->hashPassword($user, $password));
-
-        $entityManager->persist($user);
-        $entityManager->flush();
-
-        return $user;
-    }
-
-    private function login(KernelBrowser $client, array $payload): array
+    private function sendLoginRequest(KernelBrowser $client, string $email, string $password): array
     {
         $client->request(
             'POST',
             '/api/login',
             server: ['CONTENT_TYPE' => 'application/json'],
-            content: json_encode($payload),
+            content: json_encode(['email' => $email, 'password' => $password]),
         );
 
         return json_decode($client->getResponse()->getContent(), true);
