@@ -12,6 +12,7 @@ use Symfony\Component\HttpFoundation\Response;
 use Doctrine\ORM\EntityManagerInterface;
 use App\Repository\CategoryRepository;
 use App\Service\ArticleSlugGenerator;
+use App\Security\Voter\ArticleVoter;
 use App\Dto\CreateArticleDto;
 use App\Entity\Article;
 use App\Entity\User;
@@ -53,5 +54,29 @@ final class ArticleController extends AbstractController
                 'createdAt' => $article->getCreatedAt()
             ]
         ], Response::HTTP_CREATED);
+    }
+
+    #[Route('/api/articles/{id}/publish', name: 'api_article_publish', methods: ['POST'], format: 'json')]
+    #[IsGranted(ArticleVoter::PUBLISH, subject: 'article')]
+    public function publish(
+        Article $article,
+        EntityManagerInterface $entityManager,
+    ): JsonResponse {
+        try {
+            $article->publish();
+        } catch (\LogicException $exception) {
+            return $this->json(['message' => $exception->getMessage()], Response::HTTP_CONFLICT);
+        }
+
+        $entityManager->flush();
+
+        return $this->json([
+            'message' => 'Article published!',
+            'article' => [
+                'id' => $article->getId(),
+                'status' => $article->getStatus()->value,
+                'publishedAt' => $article->getPublishedAt()
+            ]
+        ], Response::HTTP_OK);
     }
 }

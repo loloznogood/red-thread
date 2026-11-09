@@ -147,23 +147,9 @@ class Article
         return $this->status;
     }
 
-    public function setStatus(ArticleStatus $status): static
-    {
-        $this->status = $status;
-
-        return $this;
-    }
-
     public function getPublishedAt(): ?\DateTimeImmutable
     {
         return $this->publishedAt;
-    }
-
-    public function setPublishedAt(?\DateTimeImmutable $publishedAt): static
-    {
-        $this->publishedAt = $publishedAt;
-
-        return $this;
     }
 
     public function getCreatedAt(): ?\DateTimeImmutable
@@ -186,5 +172,15 @@ class Article
     public function onPreUpdate(): void
     {
         $this->updatedAt = new \DateTimeImmutable();
+    }
+
+    public function publish(): void
+    {
+        if ($this->status === ArticleStatus::Published) {
+            throw new \LogicException("L'article est déjà publié.");
+        }
+
+        $this->status = ArticleStatus::Published;
+        $this->publishedAt = new \DateTimeImmutable();
     }
 }
