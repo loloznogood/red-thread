@@ -19,7 +19,7 @@ abstract class AppWebTestCase extends WebTestCase
 
         $user = new User();
         $user->setEmail($email);
-        $user->setUsername('testeur');
+        $user->setUsername($username ?? explode('@', $email)[0]);
         $user->setRoles($roles);
         $user->setPassword($passwordHasher->hashPassword($user, $password));
 
