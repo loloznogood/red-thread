@@ -169,6 +169,79 @@ final class ArticleControllerTest extends AppWebTestCase
         $this->assertResponseStatusCodeSame(404);
     }
 
+    public function testListReturnsOnlyPublishedArticles(): void
+    {
+        // Arrange
+        $client = static::createClient();
+        $author = $this->createUser('test@mail.com', 'motdepasse123!', ['ROLE_AUTHOR']);
+        ArticleFactory::new()->published()->many(2)->create(['author' => $author]);
+        $draft = ArticleFactory::createOne(['author' => $author]);
+
+        // Act
+        $data = $this->listArticles($client);
+
+        // Assert
+        $this->assertResponseStatusCodeSame(200);
+        $ids = array_column($data['items'], 'id');
+        $this->assertNotContains($draft->getId(), $ids);
+    }
+
+    public function testListIsPublic(): void
+    {
+        // Arrange
+        $client = static::createClient();
+        $author = $this->createUser('test@mail.com', 'motdepasse123!', ['ROLE_AUTHOR']);
+        ArticleFactory::new()->published()->create(['author' => $author]);
+
+        // Act
+        $this->listArticles($client, []);
+
+        // Assert
+        $this->assertResponseStatusCodeSame(200);
+    }
+
+    public function testListPagination(): void
+    {
+        // Arrange
+        $client = static::createClient();
+        $author = $this->createUser('test@mail.com', 'motdepasse123!', ['ROLE_AUTHOR']);
+        ArticleFactory::new()->published()->many(25)->create(['author' => $author]);
+
+        // Act
+        $data = $this->listArticles($client, ['page' => 2, 'limit' => 20]);
+
+        // Assert
+        $this->assertResponseStatusCodeSame(200);
+        $this->assertCount(5, $data['items']);
+        $this->assertSame(2, $data['pagination']['page']);
+        $this->assertSame(25, $data['pagination']['total']);
+        $this->assertSame(2, $data['pagination']['totalPages']);
+    }
+
+    public function testListWithInvalidPageFails(): void
+    {
+        // Arrange
+        $client = static::createClient();
+
+        // Act
+        $this->listArticles($client, ['page' => 0]);
+
+        // Assert
+        $this->assertResponseStatusCodeSame(422);
+    }
+
+    public function testListWithTooHighLimitFails(): void
+    {
+        // Arrange
+        $client = static::createClient();
+
+        // Act
+        $this->listArticles($client, ['limit' => 1000]);
+
+        // Assert
+        $this->assertResponseStatusCodeSame(422);
+    }
+
     private function createArticle(KernelBrowser $client, ?string $token, array $payload): array
     {
         $server = ['CONTENT_TYPE' => 'application/json'];
@@ -197,6 +270,17 @@ final class ArticleControllerTest extends AppWebTestCase
             'POST',
             "/api/articles/{$articleId}/publish",
             server: ['HTTP_AUTHORIZATION' => 'Bearer ' . $token],
+        );
+
+        return json_decode($client->getResponse()->getContent(), true);
+    }
+
+    private function listArticles(KernelBrowser $client, array $query = []): array
+    {
+        $client->request(
+            'GET',
+            '/api/articles',
+            $query
         );
 
         return json_decode($client->getResponse()->getContent(), true);

@@ -3,7 +3,11 @@
 namespace App\Repository;
 
 use App\Entity\Article;
+use App\Enum\ArticleStatus;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
+use Doctrine\ORM\Tools\Pagination\OffsetPaginator;
+use Doctrine\ORM\Tools\Pagination\Window;
+use Doctrine\ORM\Tools\Pagination\WindowPage;
 use Doctrine\Persistence\ManagerRegistry;
 
 /**
@@ -16,28 +20,19 @@ class ArticleRepository extends ServiceEntityRepository
         parent::__construct($registry, Article::class);
     }
 
-//    /**
-//     * @return Article[] Returns an array of Article objects
-//     */
-//    public function findByExampleField($value): array
-//    {
-//        return $this->createQueryBuilder('a')
-//            ->andWhere('a.exampleField = :val')
-//            ->setParameter('val', $value)
-//            ->orderBy('a.id', 'ASC')
-//            ->setMaxResults(10)
-//            ->getQuery()
-//            ->getResult()
-//        ;
-//    }
+    public function findPublishedPaginated(int $page, int $limit = 20): WindowPage
+    {
+        $queryBuilder = $this->createQueryBuilder('a')
+            ->leftJoin('a.author', 'u')
+            ->addSelect('u')
+            ->leftJoin('a.category', 'c')
+            ->addSelect('c')
+            ->andWhere('a.status = :status')
+            ->setParameter('status', ArticleStatus::Published)
+            ->orderBy('a.publishedAt', 'DESC');
 
-//    public function findOneBySomeField($value): ?Article
-//    {
-//        return $this->createQueryBuilder('a')
-//            ->andWhere('a.exampleField = :val')
-//            ->setParameter('val', $value)
-//            ->getQuery()
-//            ->getOneOrNullResult()
-//        ;
-//    }
+        $paginator = new OffsetPaginator(fetchJoinCollection: false);
+
+        return $paginator->paginate($queryBuilder, Window::fromPageNumberAndSize($page, $limit));
+    }
 }

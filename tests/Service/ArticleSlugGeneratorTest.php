@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Tests;
+namespace App\Tests\Service;
 
 use PHPUnit\Framework\TestCase;
 use App\Repository\ArticleRepository;
@@ -12,7 +12,7 @@ class ArticleSlugGeneratorTest extends TestCase
     public function testGenerateSlugFromTitle(): void
     {
         // Arrange: a fake repository that says "this slug is free"
-        $articleRepository = $this->createMock(ArticleRepository::class);
+        $articleRepository = $this->createStub(ArticleRepository::class);
         $articleRepository->method('count')->willReturn(0);
 
         $generator = new ArticleSlugGenerator(new AsciiSlugger(), $articleRepository);
@@ -28,7 +28,9 @@ class ArticleSlugGeneratorTest extends TestCase
     {
         // Arrange: a fake repository that says "this slug is free"
         $articleRepository = $this->createMock(ArticleRepository::class);
-        $articleRepository->method('count')->willReturn(1, 0);
+        $articleRepository->expects($this->exactly(2))
+            ->method('count')
+            ->willReturn(1, 0);
 
         $generator = new ArticleSlugGenerator(new AsciiSlugger(), $articleRepository);
 
