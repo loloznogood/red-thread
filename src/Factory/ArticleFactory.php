@@ -50,4 +50,9 @@ final class ArticleFactory extends PersistentObjectFactory
             // ->afterInstantiate(function(Article $article): void {})
         ;
     }
+
+    public function published(): static
+    {
+        return $this->afterInstantiate(fn(Article $article) => $article->publish());
+    }
 }

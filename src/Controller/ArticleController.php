@@ -13,15 +13,18 @@ use Doctrine\ORM\EntityManagerInterface;
 use App\Repository\CategoryRepository;
 use App\Service\ArticleSlugGenerator;
 use App\Security\Voter\ArticleVoter;
+use App\Dto\ArticleListQuery;
 use App\Dto\CreateArticleDto;
 use App\Entity\Article;
 use App\Entity\User;
+use App\Repository\ArticleRepository;
+use Symfony\Component\HttpKernel\Attribute\MapQueryString;
 
 final class ArticleController extends AbstractController
 {
     #[Route('/api/articles', name: 'api_article_create', methods: ['POST'], format: 'json')]
     #[IsGranted('ROLE_AUTHOR')]
-    public function createArticle(
+    public function create(
         #[MapRequestPayload] CreateArticleDto $createArticleDto,
         #[CurrentUser] User $user,
         CategoryRepository $categoryRepository,
@@ -77,6 +80,43 @@ final class ArticleController extends AbstractController
                 'status' => $article->getStatus()->value,
                 'publishedAt' => $article->getPublishedAt()
             ]
-        ], Response::HTTP_OK);
+        ]);
+    }
+
+    #[Route('/api/articles', name: 'api_article_list', methods: ['GET'], format: 'json')]
+    public function list(
+        #[MapQueryString(validationFailedStatusCode: Response::HTTP_UNPROCESSABLE_ENTITY)] ArticleListQuery $articleList,
+        ArticleRepository $articleRepository,
+    ): JsonResponse {
+
+        $items = [];
+
+        try {
+            $page = $articleRepository->findPublishedPaginated($articleList->page, $articleList->limit);
+        } catch (\LogicException $exception) {
+            return $this->json(['message' => $exception->getMessage()], Response::HTTP_CONFLICT);
+        }
+
+        foreach ($page as $article) {
+            $items[] = [
+                'id' => $article->getId(),
+                'author' => $article->getAuthor()->getUsername(),
+                'category' => $article->getCategory()->getName(),
+                'title' => $article->getTitle(),
+                'slug' => $article->getSlug(),
+                'description' => $article->getDescription(),
+                'publishedAt' => $article->getPublishedAt(),
+            ];
+        }
+
+        return $this->json([
+            'items' => $items,
+            'pagination' => [
+                'page' => $articleList->page,
+                'limit' => $articleList->limit,
+                'total' => $page->getTotalCount(),
+                'totalPages' => (int) ceil($page->getTotalCount() / $articleList->limit),
+            ],
+        ]);
     }
 }
