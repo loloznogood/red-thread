@@ -6,6 +6,7 @@ use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\HttpKernel\Attribute\MapRequestPayload;
+use Symfony\Bridge\Doctrine\Attribute\MapEntity;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 use Symfony\Component\Security\Http\Attribute\CurrentUser;
 use Symfony\Component\HttpFoundation\Response;
@@ -116,6 +117,27 @@ final class ArticleController extends AbstractController
                 'limit' => $articleList->limit,
                 'total' => $page->getTotalCount(),
                 'totalPages' => (int) ceil($page->getTotalCount() / $articleList->limit),
+            ],
+        ]);
+    }
+
+    #[Route('/api/articles/{slug}', name: 'api_article_show', methods: ['GET'], format: 'json')]
+    #[IsGranted(ArticleVoter::VIEW, subject: 'article', statusCode: 404)]
+    public function show(
+        #[MapEntity(mapping: ['slug' => 'slug'])] Article $article,
+    ): JsonResponse {
+        return $this->json([
+            'article' => [
+                'id' => $article->getId(),
+                'author' => $article->getAuthor()->getUsername(),
+                'category' => $article->getCategory()->getName(),
+                'title' => $article->getTitle(),
+                'slug' => $article->getSlug(),
+                'description' => $article->getDescription(),
+                'content' => $article->getContent(),
+                'status' => $article->getStatus()->value,
+                'publishedAt' => $article->getPublishedAt(),
+                'updatedAt' => $article->getUpdatedAt(),
             ],
         ]);
     }
