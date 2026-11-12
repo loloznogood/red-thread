@@ -242,6 +242,95 @@ final class ArticleControllerTest extends AppWebTestCase
         $this->assertResponseStatusCodeSame(422);
     }
 
+    public function testAnyoneCanReadPublishedArticle(): void
+    {
+        // Arrange
+        $client = static::createClient();
+        $author = $this->createUser('test@mail.com', 'motdepasse123!', ['ROLE_AUTHOR']);
+        $article = ArticleFactory::new()->published()->create(['author' => $author]);
+
+        // Act
+        $data = $this->showArticle($client, $article->getSlug());
+
+        // Assert
+        $this->assertResponseStatusCodeSame(200);
+        $this->assertSame($article->getTitle(), $data['article']['title']);
+        $this->assertSame($article->getContent(), $data['article']['content']);
+    }
+
+    public function testShowUnknownArticleFails(): void
+    {
+        // Arrange
+        $client = static::createClient();
+
+        // Act
+        $this->showArticle($client, 'unknown-article');
+
+        // Assert
+        $this->assertResponseStatusCodeSame(404);
+    }
+
+    public function testAnonymousCannotReadDraft(): void
+    {
+        // Arrange
+        $client = static::createClient();
+        $author = $this->createUser('test@mail.com', 'motdepasse123!', ['ROLE_AUTHOR']);
+        $article = ArticleFactory::new()->create(['author' => $author]);
+
+        // Act
+        $this->showArticle($client, $article->getSlug());
+
+        // Assert
+        $this->assertResponseStatusCodeSame(404);
+    }
+
+    public function testAuthorCanReadOwnDraft(): void
+    {
+        // Arrange
+        $client = static::createClient();
+        $author = $this->createUser('test@mail.com', 'motdepasse123!', ['ROLE_AUTHOR']);
+        $token = $this->login($client, ['email' => 'test@mail.com', 'password' => 'motdepasse123!']);
+        $article = ArticleFactory::new()->create(['author' => $author]);
+
+        // Act
+        $this->showArticle($client, $article->getSlug(), $token);
+
+        // Assert
+        $this->assertResponseStatusCodeSame(200);
+    }
+
+    public function testOtherAuthorCannotReadDraft(): void
+    {
+        // Arrange
+        $client = static::createClient();
+        $author = $this->createUser('test@mail.com', 'motdepasse123!', ['ROLE_AUTHOR']);
+        $this->createUser('otherauthor@mail.com', 'motdepasse123*', ['ROLE_AUTHOR']);
+        $otherAuthorToken = $this->login($client, ['email' => 'otherauthor@mail.com', 'password' => 'motdepasse123*']);
+        $article = ArticleFactory::new()->create(['author' => $author]);
+
+        // Act
+        $this->showArticle($client, $article->getSlug(), $otherAuthorToken);
+
+        // Assert
+        $this->assertResponseStatusCodeSame(404);
+    }
+
+    public function testAdminCanReadAnyDraft(): void
+    {
+        // Arrange
+        $client = static::createClient();
+        $author = $this->createUser('test@mail.com', 'motdepasse123!', ['ROLE_AUTHOR']);
+        $this->createUser('admin@mail.com', 'motdepasse123*', ['ROLE_ADMIN']);
+        $adminToken = $this->login($client, ['email' => 'admin@mail.com', 'password' => 'motdepasse123*']);
+        $article = ArticleFactory::new()->create(['author' => $author]);
+
+        // Act
+        $this->showArticle($client, $article->getSlug(), $adminToken);
+
+        // Assert
+        $this->assertResponseStatusCodeSame(200);
+    }
+
     private function createArticle(KernelBrowser $client, ?string $token, array $payload): array
     {
         $server = ['CONTENT_TYPE' => 'application/json'];
@@ -281,6 +370,23 @@ final class ArticleControllerTest extends AppWebTestCase
             'GET',
             '/api/articles',
             $query
+        );
+
+        return json_decode($client->getResponse()->getContent(), true);
+    }
+
+    private function showArticle(KernelBrowser $client, string $slug, ?string $token = null): array
+    {
+        $server = [];
+
+        if ($token !== null) {
+            $server['HTTP_AUTHORIZATION'] = 'Bearer ' . $token;
+        }
+
+        $client->request(
+            'GET',
+            "/api/articles/{$slug}",
+            server: $server
         );
 
         return json_decode($client->getResponse()->getContent(), true);
