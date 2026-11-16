@@ -188,4 +188,16 @@ final class ArticleController extends AbstractController
             ]
         ]);
     }
+
+    #[Route('/api/articles/{id}', name: 'api_article_delete', requirements: ['id' => '\d+'], methods: ['DELETE'], format: 'json')]
+    #[IsGranted(ArticleVoter::DELETE, subject: 'article')]
+    public function delete(
+        Article $article,
+        EntityManagerInterface $entityManager,
+    ): JsonResponse {
+        $entityManager->remove($article);
+        $entityManager->flush();
+
+        return new JsonResponse(null, Response::HTTP_NO_CONTENT);
+    }
 }
