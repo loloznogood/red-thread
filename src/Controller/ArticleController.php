@@ -16,9 +16,12 @@ use App\Service\ArticleSlugGenerator;
 use App\Security\Voter\ArticleVoter;
 use App\Dto\ArticleListQuery;
 use App\Dto\CreateArticleDto;
+use App\Dto\UpdateArticleDto;
 use App\Entity\Article;
 use App\Entity\User;
+use App\Enum\ArticleStatus;
 use App\Repository\ArticleRepository;
+use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpKernel\Attribute\MapQueryString;
 
 final class ArticleController extends AbstractController
@@ -139,6 +142,50 @@ final class ArticleController extends AbstractController
                 'publishedAt' => $article->getPublishedAt(),
                 'updatedAt' => $article->getUpdatedAt(),
             ],
+        ]);
+    }
+
+    #[Route('/api/articles/{id}', name: 'api_article_update', requirements: ['id' => '\d+'], methods: ['PATCH'], format: 'json')]
+    #[IsGranted(ArticleVoter::EDIT, subject: 'article')]
+    public function update(
+        #[MapRequestPayload] UpdateArticleDto $updateArticleDto,
+        Request $request,
+        Article $article,
+        CategoryRepository $categoryRepository,
+        ArticleSlugGenerator $slugGenerator,
+        EntityManagerInterface $entityManager,
+    ): JsonResponse {
+        if ($updateArticleDto->categoryId !== null) {
+            $article->setCategory($categoryRepository->find($updateArticleDto->categoryId));
+        }
+
+        if ($updateArticleDto->title !== null && $updateArticleDto->title !== $article->getTitle() && $article->getStatus() === ArticleStatus::Draft) {
+            $article->setSlug($slugGenerator->generate($updateArticleDto->title));
+        }
+
+        if (array_key_exists('description', $request->toArray())) {
+            $article->setDescription($updateArticleDto->description); // can be null: the description is cleared
+        }
+
+        $article->setTitle($updateArticleDto->title ?? $article->getTitle());
+        $article->setContent($updateArticleDto->content ?? $article->getContent());
+
+        $entityManager->flush();
+
+        return $this->json([
+            'message' => 'Article updated!',
+            'article' => [
+                'id' => $article->getId(),
+                'author' => $article->getAuthor()->getUsername(),
+                'category' => $article->getCategory()->getName(),
+                'title' => $article->getTitle(),
+                'slug' => $article->getSlug(),
+                'description' => $article->getDescription(),
+                'content' => $article->getContent(),
+                'status' => $article->getStatus()->value,
+                'createdAt' => $article->getCreatedAt(),
+                'updatedAt' => $article->getUpdatedAt(),
+            ]
         ]);
     }
 }

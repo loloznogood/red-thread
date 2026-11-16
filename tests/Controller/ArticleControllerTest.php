@@ -331,6 +331,160 @@ final class ArticleControllerTest extends AppWebTestCase
         $this->assertResponseStatusCodeSame(200);
     }
 
+    public function testAuthorCanUpdateOwnArticle(): void
+    {
+        // Arrange
+        $client = static::createClient();
+        $author = $this->createUser('test@mail.com', 'motdepasse123!', ['ROLE_AUTHOR']);
+        $token = $this->login($client, ['email' => 'test@mail.com', 'password' => 'motdepasse123!']);
+        $article = ArticleFactory::new()->create(['author' => $author]);
+        $newTitle = 'My first draft!';
+
+        // Act
+        $data = $this->updateArticle($client, $article->getId(), ['title' => $newTitle], $token);
+
+        // Assert
+        $this->assertResponseStatusCodeSame(200);
+    }
+
+    public function testAdminCanUpdateAnyArticle(): void
+    {
+        // Arrange
+        $client = static::createClient();
+        $author = $this->createUser('test@mail.com', 'motdepasse123!', ['ROLE_AUTHOR']);
+        $this->createUser('admin@mail.com', 'motdepasse123*', ['ROLE_ADMIN']);
+        $adminToken = $this->login($client, ['email' => 'admin@mail.com', 'password' => 'motdepasse123*']);
+        $article = ArticleFactory::new()->create(['author' => $author]);
+        $newTitle = 'My first draft!';
+
+        // Act
+        $this->updateArticle($client, $article->getId(), ['title' => $newTitle], $adminToken);
+
+        // Assert
+        $this->assertResponseStatusCodeSame(200);
+    }
+
+    public function testOtherAuthorCannotUpdateArticle(): void
+    {
+        // Arrange
+        $client = static::createClient();
+        $author = $this->createUser('test@mail.com', 'motdepasse123!', ['ROLE_AUTHOR']);
+        $this->createUser('otherauthor@mail.com', 'motdepasse123*', ['ROLE_AUTHOR']);
+        $otherAuthorToken = $this->login($client, ['email' => 'otherauthor@mail.com', 'password' => 'motdepasse123*']);
+        $article = ArticleFactory::new()->create(['author' => $author]);
+        $newTitle = 'My first draft!';
+
+        // Act
+        $this->updateArticle($client, $article->getId(), ['title' => $newTitle], $otherAuthorToken);
+
+        // Assert
+        $this->assertResponseStatusCodeSame(403);
+    }
+
+    public function testUpdateWithoutTokenFails(): void
+    {
+        // Arrange
+        $client = static::createClient();
+        $author = $this->createUser('test@mail.com', 'motdepasse123!', ['ROLE_AUTHOR']);
+        $article = ArticleFactory::new()->create(['author' => $author]);
+        $newTitle = 'My first draft!';
+
+        // Act
+        $this->updateArticle($client, $article->getId(), ['title' => $newTitle]);
+
+        // Assert
+        $this->assertResponseStatusCodeSame(401);
+    }
+
+    public function testUpdateDraftTitleRegeneratesSlug(): void
+    {
+        // Arrange
+        $client = static::createClient();
+        $author = $this->createUser('test@mail.com', 'motdepasse123!', ['ROLE_AUTHOR']);
+        $token = $this->login($client, ['email' => 'test@mail.com', 'password' => 'motdepasse123!']);
+        $article = ArticleFactory::new()->create(['author' => $author]);
+        $newTitle = 'My first draft!';
+
+        // Act
+        $data = $this->updateArticle($client, $article->getId(), ['title' => $newTitle], $token);
+
+        // Assert
+        $this->assertResponseStatusCodeSame(200);
+        $this->assertSame('my-first-draft', $data['article']['slug']);
+    }
+
+    public function testUpdatePublishedTitleKeepsSlug(): void
+    {
+        // Arrange
+        $client = static::createClient();
+        $author = $this->createUser('test@mail.com', 'motdepasse123!', ['ROLE_AUTHOR']);
+        $token = $this->login($client, ['email' => 'test@mail.com', 'password' => 'motdepasse123!']);
+        $article = ArticleFactory::new()->published()->create(['author' => $author]);
+        $newTitle = 'My first draft!';
+        $originalSlug = $article->getSlug();
+
+        // Act
+        $data = $this->updateArticle($client, $article->getId(), ['title' => $newTitle], $token);
+
+        // Assert
+        $this->assertResponseStatusCodeSame(200);
+        $this->assertSame($originalSlug, $data['article']['slug']);
+    }
+
+    public function testPartialUpdateKeepsOtherFields(): void
+    {
+        // Arrange
+        $client = static::createClient();
+        $author = $this->createUser('test@mail.com', 'motdepasse123!', ['ROLE_AUTHOR']);
+        $token = $this->login($client, ['email' => 'test@mail.com', 'password' => 'motdepasse123!']);
+        $article = ArticleFactory::new()->published()->create(['author' => $author]);
+        $newContent = 'This content is now long enough to meet the minimum limit of fifty characters.';
+
+        // Act
+        $data = $this->updateArticle($client, $article->getId(), ['content' => $newContent], $token);
+
+        // Assert
+        $this->assertResponseStatusCodeSame(200);
+        $this->assertSame($article->getTitle(), $data['article']['title']);
+        $this->assertSame($article->getDescription(), $data['article']['description']);
+        $this->assertSame($newContent, $data['article']['content']);
+    }
+
+    public function testUpdateDescriptionToNullClearsIt(): void
+    {
+        // Arrange
+        $client = static::createClient();
+        $author = $this->createUser('test@mail.com', 'motdepasse123!', ['ROLE_AUTHOR']);
+        $token = $this->login($client, ['email' => 'test@mail.com', 'password' => 'motdepasse123!']);
+        $article = ArticleFactory::new()->published()->create([
+            'author' => $author,
+            'description' => 'Une description à supprimer.',
+        ]);
+
+        // Act
+        $data = $this->updateArticle($client, $article->getId(), ['description' => null], $token);
+
+        // Assert
+        $this->assertResponseStatusCodeSame(200);
+        $this->assertNull($data['article']['description']);
+    }
+
+    public function testUpdateWithEmptyDescriptionFails(): void
+    {
+        // Arrange
+        $client = static::createClient();
+        $author = $this->createUser('test@mail.com', 'motdepasse123!', ['ROLE_AUTHOR']);
+        $token = $this->login($client, ['email' => 'test@mail.com', 'password' => 'motdepasse123!']);
+        $article = ArticleFactory::new()->published()->create(['author' => $author]);
+
+        // Act
+        $data = $this->updateArticle($client, $article->getId(), ['description' => ''], $token);
+
+        // Assert
+        $this->assertResponseStatusCodeSame(422);
+        $this->assertSame('description', $data['violations'][0]['propertyPath']);
+    }
+
     private function createArticle(KernelBrowser $client, ?string $token, array $payload): array
     {
         $server = ['CONTENT_TYPE' => 'application/json'];
@@ -387,6 +541,24 @@ final class ArticleControllerTest extends AppWebTestCase
             'GET',
             "/api/articles/{$slug}",
             server: $server
+        );
+
+        return json_decode($client->getResponse()->getContent(), true);
+    }
+
+    private function updateArticle(KernelBrowser $client, int $articleId, array $payload, ?string $token = null): array
+    {
+        $server = ['CONTENT_TYPE' => 'application/json'];
+
+        if ($token !== null) {
+            $server['HTTP_AUTHORIZATION'] = 'Bearer ' . $token;
+        }
+
+        $client->request(
+            'PATCH',
+            "/api/articles/{$articleId}",
+            server: $server,
+            content: json_encode($payload)
         );
 
         return json_decode($client->getResponse()->getContent(), true);
