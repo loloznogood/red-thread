@@ -13,6 +13,7 @@ final class ArticleVoter extends Voter
 {
     public const PUBLISH = 'ARTICLE_PUBLISH';
     public const EDIT = 'ARTICLE_EDIT';
+    public const DELETE = 'ARTICLE_DELETE';
     public const VIEW = 'ARTICLE_VIEW';
 
     public function __construct(
@@ -21,7 +22,7 @@ final class ArticleVoter extends Voter
 
     protected function supports(string $attribute, mixed $subject): bool
     {
-        return in_array($attribute, [self::PUBLISH, self::VIEW, self::EDIT], true)
+        return in_array($attribute, [self::PUBLISH, self::VIEW, self::EDIT, self::DELETE], true)
             && $subject instanceof Article;
     }
 

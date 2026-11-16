@@ -5,6 +5,7 @@ namespace App\Tests\Controller;
 use App\Factory\ArticleFactory;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use App\Factory\CategoryFactory;
+use App\Repository\ArticleRepository;
 use App\Tests\AppWebTestCase;
 
 final class ArticleControllerTest extends AppWebTestCase
@@ -485,6 +486,87 @@ final class ArticleControllerTest extends AppWebTestCase
         $this->assertSame('description', $data['violations'][0]['propertyPath']);
     }
 
+    public function testAuthorCanDeleteOwnArticle(): void
+    {
+        // Arrange
+        $client = static::createClient();
+        $author = $this->createUser('test@mail.com', 'motdepasse123!', ['ROLE_AUTHOR']);
+        $token = $this->login($client, ['email' => 'test@mail.com', 'password' => 'motdepasse123!']);
+        $article = ArticleFactory::new()->published()->create(['author' => $author]);
+        $articleId = $article->getId();
+
+        // Act
+        $this->deleteArticle($client, $article->getId(), $token);
+
+        // Assert
+        $this->assertResponseStatusCodeSame(204);
+        $articleRepository = static::getContainer()->get(ArticleRepository::class);
+        $this->assertNull($articleRepository->find($articleId));
+    }
+
+    public function testAdminCanDeleteAnyArticle(): void
+    {
+        // Arrange
+        $client = static::createClient();
+        $author = $this->createUser('test@mail.com', 'motdepasse123!', ['ROLE_AUTHOR']);
+        $this->createUser('admin@mail.com', 'motdepasse123*', ['ROLE_ADMIN']);
+        $adminToken = $this->login($client, ['email' => 'admin@mail.com', 'password' => 'motdepasse123*']);
+        $article = ArticleFactory::new()->published()->create(['author' => $author]);
+
+        // Act
+        $this->deleteArticle($client, $article->getId(), $adminToken);
+
+        // Assert
+        $this->assertResponseStatusCodeSame(204);
+    }
+
+    public function testOtherAuthorCannotDeleteArticle(): void
+    {
+        // Arrange
+        $client = static::createClient();
+        $author = $this->createUser('test@mail.com', 'motdepasse123!', ['ROLE_AUTHOR']);
+        $this->createUser('otherauthor@mail.com', 'motdepasse123*', ['ROLE_AUTHOR']);
+        $otherAuthorToken = $this->login($client, ['email' => 'otherauthor@mail.com', 'password' => 'motdepasse123*']);
+        $article = ArticleFactory::new()->published()->create(['author' => $author]);
+        $articleId = $article->getId(); // in the Arrange part
+
+        // Act
+        $this->deleteArticle($client, $article->getId(), $otherAuthorToken);
+
+        // Assert
+        $this->assertResponseStatusCodeSame(403);
+        $articleRepository = static::getContainer()->get(ArticleRepository::class);
+        $this->assertNotNull($articleRepository->find($articleId));
+    }
+
+    public function testDeleteWithoutTokenFails(): void
+    {
+        // Arrange
+        $client = static::createClient();
+        $author = $this->createUser('test@mail.com', 'motdepasse123!', ['ROLE_AUTHOR']);
+        $article = ArticleFactory::new()->published()->create(['author' => $author]);
+
+        // Act
+        $this->deleteArticle($client, $article->getId());
+
+        // Assert
+        $this->assertResponseStatusCodeSame(401);
+    }
+
+    public function testDeleteUnknownArticleFails(): void
+    {
+        // Arrange
+        $client = static::createClient();
+        $this->createUser('test@mail.com', 'motdepasse123!', ['ROLE_AUTHOR']);
+        $token = $this->login($client, ['email' => 'test@mail.com', 'password' => 'motdepasse123!']);
+
+        // Act
+        $this->deleteArticle($client, 99999, $token);
+
+        // Assert
+        $this->assertResponseStatusCodeSame(404);
+    }
+
     private function createArticle(KernelBrowser $client, ?string $token, array $payload): array
     {
         $server = ['CONTENT_TYPE' => 'application/json'];
@@ -562,5 +644,20 @@ final class ArticleControllerTest extends AppWebTestCase
         );
 
         return json_decode($client->getResponse()->getContent(), true);
+    }
+
+    private function deleteArticle(KernelBrowser $client, int $articleId, ?string $token = null): void
+    {
+        $server = ['CONTENT_TYPE' => 'application/json'];
+
+        if ($token !== null) {
+            $server['HTTP_AUTHORIZATION'] = 'Bearer ' . $token;
+        }
+
+        $client->request(
+            'DELETE',
+            "/api/articles/{$articleId}",
+            server: $server
+        );
     }
 }
