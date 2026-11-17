@@ -69,12 +69,7 @@ final class ArticleController extends AbstractController
         Article $article,
         EntityManagerInterface $entityManager,
     ): JsonResponse {
-        try {
-            $article->publish();
-        } catch (\LogicException $exception) {
-            return $this->json(['message' => $exception->getMessage()], Response::HTTP_CONFLICT);
-        }
-
+        $article->publish();
         $entityManager->flush();
 
         return $this->json([

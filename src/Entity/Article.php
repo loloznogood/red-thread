@@ -6,6 +6,7 @@ use App\Repository\ArticleRepository;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 use App\Enum\ArticleStatus;
+use App\Exception\ArticleAlreadyPublishedException;
 
 #[ORM\Entity(repositoryClass: ArticleRepository::class)]
 #[ORM\UniqueConstraint(name: 'UNIQ_ARTICLE_SLUG', fields: ['slug'])]
@@ -177,7 +178,7 @@ class Article
     public function publish(): void
     {
         if ($this->status === ArticleStatus::Published) {
-            throw new \LogicException("L'article est déjà publié.");
+            throw new ArticleAlreadyPublishedException($this->id);
         }
 
         $this->status = ArticleStatus::Published;

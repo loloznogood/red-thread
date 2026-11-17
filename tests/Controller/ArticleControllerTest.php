@@ -118,10 +118,14 @@ final class ArticleControllerTest extends AppWebTestCase
         $this->assertResponseStatusCodeSame(200);
 
         // Act
-        $this->publishArticle($client, $token, $article->getId());
+        $data = $this->publishArticle($client, $token, $article->getId());
 
         // Assert
         $this->assertResponseStatusCodeSame(409);
+        $this->assertSame('Conflict', $data['title']);
+        $this->assertSame(409, $data['status']);
+        $this->assertStringContainsString('déjà publié', $data['detail']);
+        $this->assertResponseHeaderSame('Content-Type', 'application/problem+json');
     }
 
     public function testAuthorCannotPublishOtherAuthorArticle(): void

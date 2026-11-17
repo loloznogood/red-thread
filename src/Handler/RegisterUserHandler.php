@@ -4,7 +4,10 @@ namespace App\Handler;
 
 use App\Dto\RegisterUserDto;
 use App\Entity\User;
+use App\Exception\UserAlreadyExistsException;
+use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\ORM\EntityManagerInterface;
+use Exception;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 
 final readonly class RegisterUserHandler
@@ -25,7 +28,12 @@ final readonly class RegisterUserHandler
 
         // Save in database
         $this->entityManager->persist($user);
-        $this->entityManager->flush();
+
+        try {
+            $this->entityManager->flush();
+        } catch (UniqueConstraintViolationException $exception) {
+            throw new UserAlreadyExistsException($exception);
+        }
 
         return $user;
     }
