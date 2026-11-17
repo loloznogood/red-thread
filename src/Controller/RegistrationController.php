@@ -11,25 +11,16 @@ use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 use Doctrine\ORM\EntityManagerInterface;
 use App\Dto\RegisterUserDto;
 use App\Entity\User;
+use App\Handler\RegisterUserHandler;
 
 final class RegistrationController extends AbstractController
 {
     #[Route('/api/register', methods: ['POST'], name: 'api_register', format: 'json')]
     public function register(
         #[MapRequestPayload] RegisterUserDTO $registerUserDTO,
-        UserPasswordHasherInterface $passwordHasher,
-        EntityManagerInterface $entityManager
+        RegisterUserHandler $registerUserHandler
     ): JsonResponse {
-        $user = new User();
-        $user->setEmail($registerUserDTO->email);
-        $user->setUsername($registerUserDTO->username);
-
-        // Hash the password
-        $user->setPassword($passwordHasher->hashPassword($user, $registerUserDTO->password));
-
-        // Save in database
-        $entityManager->persist($user);
-        $entityManager->flush();
+        $user = $registerUserHandler->handle($registerUserDTO);
 
         // 201 HTTP Response (Created)
         return $this->json([

@@ -342,7 +342,7 @@ final class ArticleControllerTest extends AppWebTestCase
         $newTitle = 'My first draft!';
 
         // Act
-        $data = $this->updateArticle($client, $article->getId(), ['title' => $newTitle], $token);
+        $this->updateArticle($client, $article->getId(), ['title' => $newTitle], $token);
 
         // Assert
         $this->assertResponseStatusCodeSame(200);
